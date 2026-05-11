@@ -435,16 +435,12 @@ def sanity_check_hyperdoa_sign(
     """
     from .classical import music_estimate, steering_vector_ula
 
-    wavelength = 1.0
-    d = 0.5  # half-wavelength spacing
-
     results = {}
     noise_std = 10 ** (-snr_db / 20.0)
 
     for true_deg in test_angles_deg:
-        angle_rad = np.deg2rad(true_deg)
-        # Steering vector for ULA
-        a = np.exp(1j * 2 * np.pi * d * np.arange(num_ant) * np.sin(angle_rad))
+        # Use project统一的 steering_vector_ula (负相位约定，与端到端仿真一致)
+        a = steering_vector_ula(num_ant, true_deg)
         # Random narrowband signal
         s = np.random.randn(num_snapshots) + 1j * np.random.randn(num_snapshots)
         X = a[:, None] * s[None, :] + noise_std * (

@@ -673,53 +673,126 @@ class ISACSimulator:
 
         return range_est, doa_est
 
+    def run_single_observation(
+        self,
+        rt_config: SionnaRTConfig,
+        snr_db: float,
+        seed: int,
+    ) -> tuple[float, float, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """Generate one shared ISAC observation for fair DOA-method comparison.
+
+        Returns:
+            range_est_m: Estimated range
+            angle_est_deg: Coarse TX angle estimate
+            y: Received signal [num_rx_ant, num_symbols, num_subcarriers]
+            x_tx: Transmitted signal [num_tx_ant, num_symbols, num_subcarriers]
+            valid_mask: Valid RE mask
+            f_k: Subcarrier frequencies
+        """
+        rng = np.random.default_rng(seed)
+
+        x_freq, _, valid_mask = self.waveform_gen.generate_waveform(batch_size=1)
+        x_tx = x_freq[0, 0]
+
+        scs_hz = self.config.subcarrier_spacing_khz * 1e3
+        k_centered = np.arange(x_tx.shape[-1]) - (x_tx.shape[-1] - 1) / 2
+        f_k = k_centered * scs_hz
+
+        rt_channel = SionnaRTChannel(rt_config, device=self.device, seed=seed)
+
+        vel = (
+            np.array(self.config.target_velocity_mps)
+            if self.config.target_velocity_mps
+            else None
+        )
+
+        y_echo, _, _ = rt_channel.simulate_echo(
+            x_tx=x_tx[None, :, :, :],
+            valid_mask=valid_mask,
+            subcarrier_spacing_hz=scs_hz,
+            snr_db=snr_db,
+            rng=rng,
+            num_rx_ant=self.config.num_rx_ant,
+            target_velocity_mps=vel,
+            ofdm_symbol_duration_s=self.ofdm_symbol_duration_s,
+        )
+
+        y = y_echo[0]
+
+        range_est, angle_est = coarse_to_fine_range_angle(
+            y=y,
+            x=x_tx,
+            valid=valid_mask,
+            f_k=f_k,
+            num_tx_ant=self.config.num_tx_ant,
+        )
+
+        return range_est, angle_est, y, x_tx, valid_mask, f_k
+
     def run_experiment(
         self,
         model_type: ChannelModelType,
         snr_db: float,
-    ) -> SimulationResult:
+    ) -> list[SimulationResult]:
         """Run Monte Carlo trials for one configuration.
+
+        All DOA methods share the same per-trial observation (waveform, channel,
+        noise, range estimate) — only the DOA estimator differs.  This ensures
+        a fair algorithm comparison.
 
         Args:
             model_type: Channel model type
             snr_db: Sensing SNR in dB
 
         Returns:
-            SimulationResult with statistics
+            List of SimulationResult, one per configured DOA method.
         """
         rt_config = self.config.get_rt_config(model_type)
 
-        # True values from config
         uav_pos = np.array(self.config.uav_position)
         bs_pos = np.array(self.config.bs_position)
         true_range = float(np.linalg.norm(uav_pos - bs_pos))
         true_bearing = float(np.rad2deg(np.arctan2(uav_pos[1] - bs_pos[1], uav_pos[0] - bs_pos[0])))
         true_doa = -true_bearing  # Sionna convention
 
-        results: list[SimulationResult] = []
+        # Per-method stats
+        stats = {
+            method: {"range_errors": [], "doa_errors": [], "runtime_s": 0.0}
+            for method in self.config.algorithms
+        }
 
-        for method in self.config.algorithms:
-            start_time = time.perf_counter()
-            range_errors = []
-            doa_errors = []
+        for trial in range(self.config.num_trials):
+            seed = self.config.seed + trial * 100 + int(snr_db * 10)
 
-            for trial in range(self.config.num_trials):
-                seed = self.config.seed + trial * 100 + int(snr_db * 10)
+            try:
+                range_est, angle_est, y, x_tx, valid_mask, f_k = self.run_single_observation(
+                    rt_config=rt_config, snr_db=snr_db, seed=seed
+                )
 
-                try:
-                    range_est, doa_est = self.run_single_trial(
-                        rt_config, snr_db, seed, doa_method=method
+                for method in self.config.algorithms:
+                    t0 = time.perf_counter()
+
+                    doa_est = self.estimate_doa(
+                        y=y,
+                        x_tx=x_tx,
+                        valid=valid_mask,
+                        f_k=f_k,
+                        range_est_m=range_est,
+                        tx_angle_est_deg=angle_est,
+                        method=method,
                     )
 
-                    range_errors.append(range_est - true_range)
-                    doa_errors.append(doa_est - true_doa)
-                except Exception as e:
-                    raise RuntimeError(f"[{method}] Trial {trial} failed: {e}") from e
+                    stats[method]["runtime_s"] += time.perf_counter() - t0
+                    stats[method]["range_errors"].append(range_est - true_range)
+                    stats[method]["doa_errors"].append(doa_est - true_doa)
 
-            elapsed_ms = (time.perf_counter() - start_time) * 1000.0 / self.config.num_trials
+            except Exception as e:
+                raise RuntimeError(f"Trial {trial} failed: {e}") from e
 
-            range_errors = np.array(range_errors)
-            doa_errors = np.array(doa_errors)
+        results = []
+        for method in self.config.algorithms:
+            range_errors = np.array(stats[method]["range_errors"])
+            doa_errors = np.array(stats[method]["doa_errors"])
 
             results.append(
                 SimulationResult(
@@ -740,7 +813,9 @@ class ISACSimulator:
                     doa_rmse_deg=float(np.sqrt(np.mean(doa_errors**2))),
                     doa_bias_deg=float(np.mean(doa_errors)),
                     doa_std_deg=float(np.std(doa_errors)),
-                    runtime_ms=elapsed_ms,
+                    runtime_ms=float(
+                        stats[method]["runtime_s"] * 1000.0 / self.config.num_trials
+                    ),
                     num_trials=self.config.num_trials,
                 )
             )
@@ -1218,7 +1293,7 @@ def main() -> None:
         "--doa-methods",
         nargs="+",
         default=["music"],
-        choices=["music", "music_robust", "hyperdoa"],
+        choices=["music", "hyperdoa"],
         help="DOA estimators to evaluate (default: music)",
     )
 

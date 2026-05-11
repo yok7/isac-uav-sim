@@ -2,6 +2,9 @@
 third_party/sionna/
 third_party/DOA/
 
+# Claude Code session files
+.claude/
+
 # Python
 __pycache__/
 *.py[cod]
