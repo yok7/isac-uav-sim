@@ -1,0 +1,52 @@
+# Embedded git repositories (external third-party dependencies)
+third_party/sionna/
+third_party/DOA/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Results and outputs
+results/
+*.png
+*.jpg
+*.pdf
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Model checkpoints (large files)
+*.pt
+*.pth
+*.ckpt
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Temporary files
+*.tmp
+*.cache
