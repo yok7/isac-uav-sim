@@ -840,13 +840,13 @@ def run_channel_comparison(config: SimulationConfig) -> list[SimulationResult]:
 
     snr_values = np.arange(config.snr_min_db, config.snr_max_db + 1e-9, config.snr_step_db)
 
+    # Build simulator once — HyperDOA trains once and is reused across all channels/SNRs
+    simulator = ISACSimulator(config)
+
     for model_type, model_name in channel_models:
         print(f"\n{'=' * 60}")
         print(f"Channel: {model_name}")
         print(f"{'=' * 60}")
-
-        # Build simulator once per channel — HyperDOA training happens once
-        simulator = ISACSimulator(config)
 
         for snr_db in snr_values:
             print(f"  SNR = {snr_db:.1f} dB...", end=" ")
