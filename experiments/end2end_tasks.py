@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import time
+from dataclasses import replace
+
 import numpy as np
 
 from channel import ChannelModelType, SionnaRTChannel
@@ -93,12 +95,16 @@ def run_multipath_study(config: SimulationConfig) -> list[SimulationResult]:
 
     snr_db = 10.0
 
+    # Multipath study evaluates MUSIC only — no need to train HyperDOA
+    task_config = replace(config, algorithms=("music",))
+    simulator = ISACSimulator(task_config)
+
     for max_depth, spec, diff, name in depth_configs:
         print(f"\n{'=' * 60}")
         print(f"Multipath config: {name}")
         print(f"{'=' * 60}")
 
-        rt_config = config.get_rt_config(ChannelModelType.STREET_CANYON)
+        rt_config = task_config.get_rt_config(ChannelModelType.STREET_CANYON)
         rt_config.max_depth = max_depth
         rt_config.specular_reflection = spec
         rt_config.diffuse_scattering = diff
@@ -106,26 +112,24 @@ def run_multipath_study(config: SimulationConfig) -> list[SimulationResult]:
         range_errors = []
         doa_errors = []
 
-        simulator = ISACSimulator(config)
-        rng = np.random.default_rng(config.seed)
-
         start_time = time.perf_counter()
 
-        for trial in range(config.num_trials):
-            seed = config.seed + trial * 100
+        for trial in range(task_config.num_trials):
+            seed = task_config.seed + trial * 100
+            rng = np.random.default_rng(seed)
 
             try:
                 x_freq, _, valid_mask = simulator.waveform_gen.generate_waveform(batch_size=1)
                 x_tx = x_freq[0, 0]  # [num_tx_ant, num_symbols, num_subcarriers]
-                scs_hz = config.subcarrier_spacing_khz * 1e3
+                scs_hz = task_config.subcarrier_spacing_khz * 1e3
                 k_centered = np.arange(x_tx.shape[-1]) - (x_tx.shape[-1] - 1) / 2
                 f_k = k_centered * scs_hz
 
                 rt_channel = SionnaRTChannel(rt_config, device=simulator.device, seed=seed)
 
                 vel = (
-                    np.array(config.target_velocity_mps)
-                    if config.target_velocity_mps
+                    np.array(task_config.target_velocity_mps)
+                    if task_config.target_velocity_mps
                     else None
                 )
 
@@ -135,7 +139,7 @@ def run_multipath_study(config: SimulationConfig) -> list[SimulationResult]:
                     subcarrier_spacing_hz=scs_hz,
                     snr_db=snr_db,
                     rng=rng,
-                    num_rx_ant=config.num_rx_ant,
+                    num_rx_ant=task_config.num_rx_ant,
                     target_velocity_mps=vel,
                     ofdm_symbol_duration_s=simulator.ofdm_symbol_duration_s,
                 )
@@ -143,11 +147,11 @@ def run_multipath_study(config: SimulationConfig) -> list[SimulationResult]:
                 y = y_echo[0]
 
                 range_est, angle_est = coarse_to_fine_range_angle(
-                    y=y, x=x_tx, valid=valid_mask, f_k=f_k, num_tx_ant=config.num_tx_ant,
+                    y=y, x=x_tx, valid=valid_mask, f_k=f_k, num_tx_ant=task_config.num_tx_ant,
                 )
 
-                uav_pos = np.array(config.uav_position)
-                bs_pos = np.array(config.bs_position)
+                uav_pos = np.array(task_config.uav_position)
+                bs_pos = np.array(task_config.bs_position)
                 true_range = float(np.linalg.norm(uav_pos - bs_pos))
                 true_bearing = float(
                     np.rad2deg(
@@ -171,7 +175,7 @@ def run_multipath_study(config: SimulationConfig) -> list[SimulationResult]:
             except Exception as e:
                 raise RuntimeError(f"Trial {trial} failed: {e}") from e
 
-        elapsed_ms = (time.perf_counter() - start_time) * 1000.0 / config.num_trials
+        elapsed_ms = (time.perf_counter() - start_time) * 1000.0 / task_config.num_trials
 
         range_errors = np.array(range_errors)
         doa_errors = np.array(doa_errors)
@@ -184,8 +188,8 @@ def run_multipath_study(config: SimulationConfig) -> list[SimulationResult]:
                 specular_reflection=spec,
                 diffuse_scattering=diff,
                 target_velocity_mps=(
-                    float(np.linalg.norm(config.target_velocity_mps))
-                    if config.target_velocity_mps
+                    float(np.linalg.norm(task_config.target_velocity_mps))
+                    if task_config.target_velocity_mps
                     else 0.0
                 ),
                 snr_db=snr_db,
@@ -196,7 +200,7 @@ def run_multipath_study(config: SimulationConfig) -> list[SimulationResult]:
                 doa_bias_deg=float(np.mean(doa_errors)),
                 doa_std_deg=float(np.std(doa_errors)),
                 runtime_ms=elapsed_ms,
-                num_trials=config.num_trials,
+                num_trials=task_config.num_trials,
             )
         )
 
@@ -257,7 +261,7 @@ def run_moving_target_study(config: SimulationConfig) -> list[SimulationResult]:
             bs_position=config.bs_position,
             uav_position=config.uav_position,
             target_velocity_mps=velocity,
-            algorithms=config.algorithms,
+            algorithms=("music",),  # Moving target study evaluates MUSIC only
             output_dir=config.output_dir,
             seed=config.seed,
         )
