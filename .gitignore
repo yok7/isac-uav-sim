@@ -34,6 +34,12 @@ results/
 *.png
 *.jpg
 *.pdf
+*.pptx
+*.docx
+*.xlsx
+
+# Reports
+report/
 
 # Logs
 *.log
