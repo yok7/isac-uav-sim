@@ -12,12 +12,6 @@ from .isac_waveform import (
     estimate_channel_ls,
     equalize_ofdm_symbols,
 )
-from .isac_ofdm import (
-    IsacOfdmConfig,
-    ber_proxy_qpsk,
-    effective_comm_rate_bpshz,
-    generate_isac_ofdm_frame,
-)
 
 __all__ = [
     # Sionna-based waveforms
@@ -25,9 +19,4 @@ __all__ = [
     "IsacWaveformConfig",
     "estimate_channel_ls",
     "equalize_ofdm_symbols",
-    # Simplified waveforms
-    "IsacOfdmConfig",
-    "generate_isac_ofdm_frame",
-    "effective_comm_rate_bpshz",
-    "ber_proxy_qpsk",
 ]
