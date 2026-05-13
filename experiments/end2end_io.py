@@ -225,3 +225,80 @@ def plot_results(results: list[SimulationResult], output_dir: Path) -> None:
     plt.tight_layout()
     fig.savefig(output_dir / "end2end_rmse_vs_snr.png", dpi=180)
     plt.close(fig)
+
+
+def plot_snapshot_results(
+    results: list[SimulationResult], output_dir: Path
+) -> None:
+    """Plot DOA RMSE vs number of snapshots.
+
+    One figure per SNR value. Curves are grouped by channel_type and doa_method.
+
+    Args:
+        results: List of SimulationResult objects
+        output_dir: Output directory
+    """
+    snapshot_values = sorted(
+        {
+            r.num_snapshots
+            for r in results
+            if r.num_snapshots is not None
+        }
+    )
+
+    if len(snapshot_values) <= 1:
+        # Nothing to plot — only one snapshot count
+        return
+
+    snr_values = sorted(set(r.snr_db for r in results))
+    channel_types = sorted(set(r.channel_type for r in results))
+    doa_methods = sorted(set(r.doa_method for r in results))
+
+    method_linestyles = {
+        "music": "-",
+        "hyperdoa": ":",
+        "esprit": "-.",
+    }
+
+    for snr_db in snr_values:
+        fig, ax = plt.subplots(1, 1, figsize=(8, 5))
+
+        for ch_type in channel_types:
+            for method in doa_methods:
+                curve = [
+                    r for r in results
+                    if r.snr_db == snr_db
+                    and r.channel_type == ch_type
+                    and r.doa_method == method
+                    and r.num_snapshots is not None
+                ]
+
+                if not curve:
+                    continue
+
+                curve = sorted(curve, key=lambda r: r.num_snapshots)
+
+                xs = [r.num_snapshots for r in curve]
+                ys = [r.doa_rmse_deg for r in curve]
+
+                ax.plot(
+                    xs,
+                    ys,
+                    marker="o",
+                    linestyle=method_linestyles.get(method, "-"),
+                    linewidth=1.5,
+                    label=f"{ch_type} [{method}]",
+                )
+
+        ax.set_xlabel("Number of snapshots T", fontsize=12)
+        ax.set_ylabel("DOA RMSE (deg)", fontsize=12)
+        ax.set_title(f"DOA RMSE vs Snapshots, SNR={snr_db:.1f} dB", fontsize=14)
+        ax.grid(True, alpha=0.3)
+        ax.legend(fontsize=8, loc="best")
+
+        fig.tight_layout()
+        fig.savefig(
+            output_dir / f"doa_rmse_vs_snapshots_snr_{snr_db:.1f}dB.png",
+            dpi=180,
+        )
+        plt.close(fig)

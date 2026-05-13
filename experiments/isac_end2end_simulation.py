@@ -37,6 +37,7 @@ from experiments.end2end_io import (
     save_results,
     print_results_table,
     plot_results,
+    plot_snapshot_results,
 )
 
 
@@ -115,6 +116,7 @@ def main() -> None:
         results = run_channel_comparison(config)
         all_results.extend(results)
         plot_results(results, config.output_dir)
+        plot_snapshot_results(results, config.output_dir)
 
     if args.multipath_study:
         results = run_multipath_study(config)
@@ -129,6 +131,7 @@ def main() -> None:
         results = run_channel_comparison(config)
         all_results.extend(results)
         plot_results(results, config.output_dir)
+        plot_snapshot_results(results, config.output_dir)
 
     if all_results:
         save_results(all_results, config.output_dir)

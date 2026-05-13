@@ -269,11 +269,12 @@ class ISACSimulator:
                 # Clamp effective snapshot count to what this trial actually has
                 trial_effective = min(effective_snapshots, trial_valid)
 
-                # Per-trial RNG for snapshot selection (shared across DOA methods)
-                snapshot_rng = np.random.default_rng(seed + 2026)
-
                 for method in self.config.algorithms:
                     t0 = time.perf_counter()
+
+                    # Re-create the same RNG seed for each method so random
+                    # snapshot selection uses the same subset for MUSIC and HyperDOA.
+                    snapshot_rng = np.random.default_rng(seed + 2026)
 
                     doa_est = doa_bank.estimate(
                         method=method,
