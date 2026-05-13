@@ -66,6 +66,25 @@ def main() -> None:
         help="DOA estimators to evaluate (default: music)",
     )
 
+    parser.add_argument(
+        "--snapshots",
+        nargs="+",
+        type=int,
+        default=None,
+        help=(
+            "Snapshot counts for DOA estimators, e.g. --snapshots 16 32 64 128. "
+            "If omitted, use all available snapshots."
+        ),
+    )
+
+    parser.add_argument(
+        "--snapshot-selection",
+        type=str,
+        default="first",
+        choices=["first", "random"],
+        help='How to select snapshots when limiting T: "first" or "random" (default: first)',
+    )
+
     args = parser.parse_args()
 
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
@@ -78,6 +97,8 @@ def main() -> None:
         num_trials=args.num_trials,
         seed=args.seed,
         algorithms=tuple(args.doa_methods),
+        snapshot_counts=tuple(args.snapshots) if args.snapshots else (None,),
+        snapshot_selection=args.snapshot_selection,
     )
 
     if args.output_dir:

@@ -40,6 +40,13 @@ class SimulationConfig:
     target_velocity_mps: tuple[float, float, float] | None = None
 
     algorithms: tuple[str, ...] = ("music",)
+
+    # Snapshot sweep: None means use all available snapshots
+    # e.g. (16, 32, 64, None) scans 16/32/64 snapshots and "all"
+    snapshot_counts: tuple[int | None, ...] = (None,)
+    # How to select snapshots: "first" keeps first T, "random" randomly picks T
+    snapshot_selection: str = "first"
+
     output_dir: Path = field(default_factory=lambda: RESULTS_DIR)
     seed: int = 42
 
@@ -99,13 +106,16 @@ class SimulationResult:
     target_velocity_mps: float | None
     snr_db: float
 
-    range_rmse_m: float
-    range_bias_m: float
-    range_std_m: float
+    num_snapshots: int | None = None
+    available_snapshots: int | None = None
 
-    doa_rmse_deg: float
-    doa_bias_deg: float
-    doa_std_deg: float
+    range_rmse_m: float = 0.0
+    range_bias_m: float = 0.0
+    range_std_m: float = 0.0
+
+    doa_rmse_deg: float = 0.0
+    doa_bias_deg: float = 0.0
+    doa_std_deg: float = 0.0
 
     vel_rmse_mps: float | None = None
     vel_bias_mps: float | None = None

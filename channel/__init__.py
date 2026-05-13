@@ -1,41 +1,28 @@
 """Channel simulation module.
 
-Provides:
-- Sionna RT based ray-tracing channel models (LoS/NLoS/mixed)
-- Multipath channel models (geometric/statistical)
-- 3GPP channel models (UMi/UMa/RMa)
-- Channel factory for unified access to different channel models
+Provides Sionna RT based ray-tracing channel models (LoS/NLoS/mixed)
+for the ISAC end-to-end simulation framework.
+
+Sub-modules:
+  rt_config  — ChannelModelType / SionnaRTConfig
+  rt_core    — RT scene, solver options, single-leg CFR
+  rt_echo    — single-frame and multi-frame echo simulation
+  rt_dataset — CFR dataset generation for training
+  sionna_rt_channel — backwards-compatible facade
 """
 
-from .sionna_rt_channel import (
-    SionnaRTChannel,
-    SionnaRTConfig,
+from channel.sionna_rt_channel import (
     ChannelModelType,
+    SionnaRTConfig,
+    SionnaRTChannel,
     generate_cfr_dataset,
+    generate_cir_dataset,
 )
-from .multipath_channel import (
-    MultipathChannel,
-    MultipathConfig,
-    GeometricChannel,
-    StatisticalChannel,
-    FadingType,
-    generate_multipath_cir,
-)
-from .ula_scene import UlaSceneConfig, simulate_ula_snapshots
 
 __all__ = [
-    # Sionna RT channel
-    "SionnaRTChannel",
-    "SionnaRTConfig",
     "ChannelModelType",
+    "SionnaRTConfig",
+    "SionnaRTChannel",
     "generate_cfr_dataset",
-    # Multipath channel
-    "MultipathChannel",
-    "MultipathConfig",
-    "GeometricChannel",
-    "StatisticalChannel",
-    "generate_multipath_cir",
-    # Legacy ULA scene
-    "UlaSceneConfig",
-    "simulate_ula_snapshots",
+    "generate_cir_dataset",
 ]

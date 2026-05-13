@@ -17,6 +17,62 @@ except ImportError:
 C = 299_792_458.0
 
 
+def select_snapshots(
+    snapshots: np.ndarray,
+    snapshot_limit: int | None,
+    selection: str = "first",
+    rng: np.random.Generator | None = None,
+) -> np.ndarray:
+    """Select a fixed number of snapshots from a snapshot matrix.
+
+    Args:
+        snapshots: Snapshot matrix in shape [T, N], where T is the number of
+            snapshots and N is the number of RX antennas.
+        snapshot_limit: Number of snapshots to keep. None means keep all.
+        selection: "first" keeps the first T snapshots.
+            "random" randomly selects T snapshots without replacement.
+        rng: Random generator used only when selection="random".
+
+    Returns:
+        Selected snapshots with shape [snapshot_limit, N] or [T, N].
+
+    Raises:
+        ValueError: If snapshot_limit is not positive or exceeds available count.
+    """
+    if snapshot_limit is None:
+        return snapshots
+
+    if snapshot_limit <= 0:
+        raise ValueError(
+            f"snapshot_limit must be positive, got {snapshot_limit}"
+        )
+
+    num_available = snapshots.shape[0]
+
+    if snapshot_limit > num_available:
+        # Trial-time waveform may have fewer valid RE than the training waveform.
+        # Fall back to all available (warn but don't crash).
+        snapshot_limit = num_available
+
+    if snapshot_limit == num_available:
+        return snapshots
+
+    if selection == "first":
+        return snapshots[:snapshot_limit]
+
+    if selection == "random":
+        if rng is None:
+            rng = np.random.default_rng(0)
+        indices = rng.choice(num_available, size=snapshot_limit, replace=False)
+        indices = np.sort(indices)
+        return snapshots[indices]
+
+    raise ValueError(
+        f"Unsupported snapshot selection mode: {selection}. "
+        'Use "first" or "random".'
+    )
+
+
 def estimate_doa_music_after_range(
     y: np.ndarray,
     x: np.ndarray,
@@ -27,6 +83,9 @@ def estimate_doa_music_after_range(
     num_tx_ant: int,
     num_rx_ant: int,
     angle_grid_deg: np.ndarray,
+    snapshot_limit: int | None = None,
+    snapshot_selection: str = "first",
+    rng: np.random.Generator | None = None,
 ) -> float:
     """Estimate DOA using MUSIC after range compensation.
 
@@ -40,6 +99,9 @@ def estimate_doa_music_after_range(
         num_tx_ant: Number of TX antennas
         num_rx_ant: Number of RX antennas
         angle_grid_deg: DOA search grid
+        snapshot_limit: Limit number of snapshots used. None = use all.
+        snapshot_selection: "first" or "random"
+        rng: Random generator for "random" selection
 
     Returns:
         doa_est: Estimated DOA in degrees
@@ -60,6 +122,14 @@ def estimate_doa_music_after_range(
                 snapshots.append(y[:, sym, sc] / denom)
 
     snapshots = np.asarray(snapshots, dtype=np.complex128)
+
+    # Limit snapshot count if requested
+    snapshots = select_snapshots(
+        snapshots,
+        snapshot_limit=snapshot_limit,
+        selection=snapshot_selection,
+        rng=rng,
+    )
 
     if snapshots.shape[0] < num_rx_ant:
         return float(angle_grid_deg[0])
@@ -131,6 +201,7 @@ class DOAEstimatorBank:
         self.algorithms = algorithms
         self.num_rx_ant = num_rx_ant
         self.num_tx_ant = num_tx_ant
+        self.num_snapshots = num_snapshots
         self.angle_grid_deg = angle_grid_deg
 
         self.hyperdoa: HyperDOAEstimator | None = None
@@ -177,6 +248,9 @@ class DOAEstimatorBank:
         f_k: np.ndarray,
         range_est_m: float,
         tx_angle_est_deg: float,
+        snapshot_limit: int | None = None,
+        snapshot_selection: str = "first",
+        rng: np.random.Generator | None = None,
     ) -> float:
         """Estimate DOA using the specified method.
 
@@ -188,6 +262,9 @@ class DOAEstimatorBank:
             f_k: Subcarrier frequencies
             range_est_m: Estimated range for phase compensation
             tx_angle_est_deg: Estimated TX angle for steering
+            snapshot_limit: Limit number of snapshots used. None = use all.
+            snapshot_selection: "first" or "random"
+            rng: Random generator for "random" selection
 
         Returns:
             doa_est_deg: Estimated DOA in degrees
@@ -200,6 +277,9 @@ class DOAEstimatorBank:
                 f_k=f_k,
                 range_est_m=range_est_m,
                 tx_angle_est_deg=tx_angle_est_deg,
+                snapshot_limit=snapshot_limit,
+                snapshot_selection=snapshot_selection,
+                rng=rng,
             )
 
         if method == "music":
@@ -213,6 +293,9 @@ class DOAEstimatorBank:
                 num_tx_ant=self.num_tx_ant,
                 num_rx_ant=self.num_rx_ant,
                 angle_grid_deg=self.angle_grid_deg,
+                snapshot_limit=snapshot_limit,
+                snapshot_selection=snapshot_selection,
+                rng=rng,
             )
 
         raise ValueError(f"Unsupported DOA method: {method}")
@@ -225,6 +308,9 @@ class DOAEstimatorBank:
         f_k: np.ndarray,
         range_est_m: float,
         tx_angle_est_deg: float,
+        snapshot_limit: int | None = None,
+        snapshot_selection: str = "first",
+        rng: np.random.Generator | None = None,
     ) -> float:
         """Estimate DOA using HyperDOA after range compensation."""
         if self.hyperdoa is None:
@@ -245,6 +331,14 @@ class DOAEstimatorBank:
                     snapshots.append(y[:, sym, sc] / denom)
 
         snapshots = np.asarray(snapshots, dtype=np.complex128)
+
+        # Limit snapshot count if requested
+        snapshots = select_snapshots(
+            snapshots,
+            snapshot_limit=snapshot_limit,
+            selection=snapshot_selection,
+            rng=rng,
+        )
 
         if snapshots.shape[0] < self.num_rx_ant:
             return float(self.angle_grid_deg[0])

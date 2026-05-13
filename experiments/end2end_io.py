@@ -26,6 +26,7 @@ def save_results(results: list[SimulationResult], output_dir: Path) -> None:
         "channel_type", "doa_method", "max_depth",
         "specular_reflection", "diffuse_scattering",
         "target_velocity_mps", "true_radial_velocity_mps", "snr_db",
+        "num_snapshots", "available_snapshots",
         "range_rmse_m", "range_bias_m", "range_std_m",
         "doa_rmse_deg", "doa_bias_deg", "doa_std_deg",
         "vel_rmse_mps", "vel_bias_mps", "vel_std_mps",
@@ -45,6 +46,8 @@ def save_results(results: list[SimulationResult], output_dir: Path) -> None:
                 "diffuse_scattering": result.diffuse_scattering,
                 "target_velocity_mps": f"{result.target_velocity_mps:.2f}",
                 "snr_db": f"{result.snr_db:.1f}",
+                "num_snapshots": result.num_snapshots if result.num_snapshots is not None else "",
+                "available_snapshots": result.available_snapshots if result.available_snapshots is not None else "",
                 "range_rmse_m": f"{result.range_rmse_m:.4f}",
                 "range_bias_m": f"{result.range_bias_m:.4f}",
                 "range_std_m": f"{result.range_std_m:.4f}",
@@ -79,13 +82,13 @@ def print_results_table(results: list[SimulationResult]) -> None:
     Args:
         results: List of SimulationResult objects
     """
-    print("\n" + "=" * 155)
+    print("\n" + "=" * 165)
     print(
-        f"{'Channel':<22} {'DOA':<10} {'MaxD':>5} {'Spec':>5} {'Diff':>5} {'Vel':>6} "
-        f"{'TrueRadial':>10} {'SNR':>6} {'RangeRMSE':>10} {'DOARMSE':>10} "
-        f"{'VelRMSE':>10} {'VelStd':>8}"
+        f"{'Channel':<22} {'DOA':<10} {'MaxD':>5} {'Spec':>5} {'Diff':>5} "
+        f"{'Vel':>6} {'TrueRadial':>10} {'SNR':>6} {'T':>6} "
+        f"{'RangeRMSE':>10} {'DOARMSE':>10} {'VelRMSE':>10} {'VelStd':>8}"
     )
-    print("-" * 155)
+    print("-" * 165)
 
     for r in results:
         vel_str = f"{r.vel_rmse_mps:.2f}" if r.vel_rmse_mps is not None else "      N/A"
@@ -101,11 +104,12 @@ def print_results_table(results: list[SimulationResult]) -> None:
             f"{r.channel_type:<22} {r.doa_method:<10} {r.max_depth:>5} "
             f"{str(r.specular_reflection):>5} {str(r.diffuse_scattering):>5} "
             f"{r.target_velocity_mps:>6.1f} {true_rad_str:>10} {r.snr_db:>6.1f} "
+            f"{str(r.num_snapshots) if r.num_snapshots is not None else 'all':>6} "
             f"{r.range_rmse_m:>10.3f} {r.doa_rmse_deg:>10.3f} "
             f"{vel_str:>10} {vel_std_str:>8}"
         )
 
-    print("=" * 155)
+    print("=" * 165)
 
 
 def plot_results(results: list[SimulationResult], output_dir: Path) -> None:

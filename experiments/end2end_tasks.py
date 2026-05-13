@@ -44,7 +44,9 @@ def run_channel_comparison(config: SimulationConfig) -> list[SimulationResult]:
         config.snr_step_db,
     )
 
-    # Build simulator once — HyperDOA trains once and is reused
+    snapshot_counts = config.snapshot_counts or (None,)
+
+    # Build simulator once — DOA banks are cached per snapshot count
     simulator = ISACSimulator(config)
 
     for model_type, model_name in channel_models:
@@ -53,17 +55,26 @@ def run_channel_comparison(config: SimulationConfig) -> list[SimulationResult]:
         print(f"{'=' * 60}")
 
         for snr_db in snr_values:
-            print(f"  SNR = {snr_db:.1f} dB...", end=" ")
-
-            result_list = simulator.run_experiment(model_type, snr_db)
-
-            for res in result_list:
+            for snapshot_limit in snapshot_counts:
+                snap_label = "all" if snapshot_limit is None else str(snapshot_limit)
                 print(
-                    f"[{res.channel_type} | {res.doa_method}] "
-                    f"Range RMSE = {res.range_rmse_m:.2f} m, "
-                    f"DOA RMSE = {res.doa_rmse_deg:.2f} deg"
+                    f"  SNR = {snr_db:.1f} dB, snapshots = {snap_label}...",
+                    end=" ",
                 )
-                results.append(res)
+
+                result_list = simulator.run_experiment(
+                    model_type=model_type,
+                    snr_db=snr_db,
+                    snapshot_limit=snapshot_limit,
+                )
+
+                for res in result_list:
+                    print(
+                        f"[{res.channel_type} | {res.doa_method} | T={res.num_snapshots}] "
+                        f"Range RMSE = {res.range_rmse_m:.2f} m, "
+                        f"DOA RMSE = {res.doa_rmse_deg:.2f} deg"
+                    )
+                    results.append(res)
 
     return results
 
@@ -193,6 +204,8 @@ def run_multipath_study(config: SimulationConfig) -> list[SimulationResult]:
                     else 0.0
                 ),
                 snr_db=snr_db,
+                num_snapshots=simulator.available_snapshots,
+                available_snapshots=simulator.available_snapshots,
                 range_rmse_m=float(np.sqrt(np.mean(range_errors**2))),
                 range_bias_m=float(np.mean(range_errors)),
                 range_std_m=float(np.std(range_errors)),
@@ -375,6 +388,8 @@ def run_moving_target_study(config: SimulationConfig) -> list[SimulationResult]:
                 diffuse_scattering=rt_config.diffuse_scattering,
                 target_velocity_mps=float(np.linalg.norm(velocity)),
                 snr_db=snr_db,
+                num_snapshots=simulator.available_snapshots,
+                available_snapshots=simulator.available_snapshots,
                 range_rmse_m=float(np.sqrt(np.mean(range_errors**2))),
                 range_bias_m=float(np.mean(range_errors)),
                 range_std_m=float(np.std(range_errors)),
